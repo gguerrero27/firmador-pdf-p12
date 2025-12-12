@@ -1,76 +1,149 @@
-📄 Firma PDF visible y digital — Descripción técnica para GitHub
+📄 Firma PDF Visible y Digital
 
-Aplicación completa para firmar PDFs con certificados .p12, añadir una firma visible (QR + texto) en la posición seleccionada sobre el documento y generar un PDF firmado digitalmente (PKCS#7) listo para descarga.
-Incluye frontend con visor PDF.js y backend Node.js/Express para procesar la firma.
+Aplicación completa para firmar documentos PDF usando certificados .p12, agregando una firma visible (QR + texto) en la posición seleccionada por el usuario y generando un PDF firmado digitalmente (PKCS#7) listo para descarga.
 
-🔧 Tecnologías y librerías usadas
+Incluye un visor con PDF.js para navegar entre páginas y elegir exactamente dónde colocar la firma con un solo clic.
+
+🚀 Características principales
+
+✔️ Carga de PDF y certificado .p12.
+
+✔️ Dibujo de firma visible (QR + texto) en la coordenada seleccionada.
+
+✔️ Firma digital real en formato CMS / PKCS#7.
+
+✔️ Visualizador completo del PDF con paginación.
+
+✔️ Conversión precisa de click → coordenadas PDF.
+
+✔️ Compatible con múltiples páginas.
+
+✔️ Descarga automática del PDF firmado.
+
+🧩 Tecnologías y librerías usadas
 Backend (Node.js 18+)
-
-express → Servidor HTTP y endpoint /sign.
-
-multer → Recepción de archivos PDF y .p12 como multipart/form-data.
-
-pdf-lib → Edición del PDF: agregar QR, texto y elementos visibles.
-
-node-signpdf → Firma digital CMS/PKCS#7 dentro del PDF.
-
-node-forge → Lectura del certificado .p12, extracción de claves y CN.
-
-qrcode → Generación de QR en base64 para insertar en el PDF.
-
+Librería	Función
+express	Servidor HTTP + endpoint /sign.
+multer	Manejo de multipart/form-data y subida de archivos.
+pdf-lib	Inserción de QR, texto y gráficos dentro del PDF.
+node-signpdf	Generación de la firma digital PKCS#7 en PDF.
+node-forge	Lectura y parseo del .p12 (certificado y clave).
+qrcode	Generación de QR embebible como PNG base64.
 Frontend
-
-pdfjs-dist (PDF.js) → Render del PDF dentro de <canvas> para permitir seleccionar la posición exacta donde irá la firma.
-
-JavaScript Vanilla → Cálculo de coordenadas reales (canvas interno vs. pantalla), control de páginas, envío del formulario.
-
+Librería	Función
+pdfjs-dist (PDF.js)	Renderizado del PDF en <canvas> para seleccionar coordenadas.
 DevTools
 
-nodemon (opcional) → Recarga automática en desarrollo.
+nodemon (opcional) — Recarga automática en desarrollo.
 
-.gitignore → Exclusión de /uploads, certificados y artefactos.
+.gitignore — Excluye certificados y archivos temporales.
 
-🏗️ Arquitectura y flujo del proceso
-1. Carga y visualización del PDF (Frontend)
+📁 Estructura del proyecto
+/project
+  /public
+    index.html
+    app.js
+    styles.css
+  /utils
+    signPdf.js        # Lógica de firma visible + digital
+  /uploads            # Archivos temporales (gitignore)
+  server.js           # Express + Multer + endpoint /sign
+  package.json
+  .gitignore
+  README.md
 
-PDF.js carga el documento y lo dibuja en un <canvas>.
+🔧 Instalación
+npm install
 
-Se normaliza el clic del usuario convirtiendo coordenadas pantalla → PDF (canvas interno).
 
-Se guarda { page, x, y } para enviarlo al backend.
+Si necesitas instalarlas manualmente:
 
-2. Envío al backend
+npm install express multer pdf-lib node-signpdf node-forge qrcode pdfjs-dist
+npm install -D nodemon
 
-Se envían:
+▶️ Ejecución del proyecto
+Modo normal
+node server.js
 
-archivo PDF
+Modo desarrollo
+npx nodemon server.js
 
-archivo .p12
 
-contraseña del certificado
+Servidor disponible en:
 
-coordenadas x, y
+http://localhost:3000
 
-número de página
+📝 Uso
 
-Usando fetch() + FormData.
+Cargar un PDF.
 
-3. Procesamiento en el servidor
+Cargar un certificado .p12.
 
-multer recibe y almacena temporalmente los archivos.
+Escribir la contraseña del .p12.
 
-pdf-lib abre el PDF base.
+Navegar entre páginas del PDF.
 
-Se genera QR con qrcode.
+Hacer clic donde se desea ubicar la firma visible.
 
-Se inserta QR y texto de firma visible en la página seleccionada.
+Pulsar Firmar y descargar.
 
-Se añade placeholder PKCS#7 con node-signpdf.
+Se empieza la descarga del PDF firmado.
 
-Se firma usando el certificado .p12 + contraseña.
+🔍 Explicación técnica del flujo
+1. Frontend
 
-4. Respuesta al usuario
+Se carga el PDF usando pdfjsLib.getDocument.
 
-El servidor devuelve el PDF firmado listo para descarga.
+Se renderiza la página actual en <canvas>.
 
-El frontend genera un Blob y fuerza la descarga automática.
+Al hacer clic:
+
+Se convierte la posición del cursor desde coordenadas de pantalla → coordenadas reales del PDF.
+
+Se muestra un marcador.
+
+Se envían al backend: x, y, page.
+
+2. Backend
+
+multer recibe PDF + .p12.
+
+Se extrae certificado y clave usando node-forge.
+
+Se genera un QR con qrcode.toDataURL.
+
+Con pdf-lib:
+
+Se inserta el QR.
+
+Se dibuja texto (firmante, fecha, etc.).
+
+Se genera un PDF intermedio.
+
+node-signpdf inserta la firma digital real PKCS#7.
+
+El servidor retorna el PDF final.
+
+🔐 Seguridad
+
+❗ El servidor borra automáticamente los archivos PDF y .p12 temporales.
+
+Se recomienda usar HTTPS en producción.
+
+No almacenar certificados de usuarios en disco.
+
+Establecer límite de tamaño en uploads.
+
+🧪 Pendientes / Mejoras opcionales
+
+Permitir múltiples firmas visibles.
+
+Ajuste de tamaño del recuadro de firma.
+
+Soporte para varios firmantes.
+
+Configuración avanzada del QR (color, logo, etc.).
+
+Vista miniatura de todas las páginas.
+
+📫 Autor
