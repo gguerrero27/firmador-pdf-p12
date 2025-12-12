@@ -1,185 +1,76 @@
-Firma PDF visible y digital
+📄 Firma PDF visible y digital — Descripción técnica para GitHub
 
-Proyecto para firmar PDFs con certificado .p12, mostrar firma visible (QR + texto) en una ubicación escogida por el usuario y generar el PDF firmado listo para descarga. Backend en Node.js/Express, frontend con PDF.js y un canvas para capturar la posición exacta de firma.
+Aplicación completa para firmar PDFs con certificados .p12, añadir una firma visible (QR + texto) en la posición seleccionada sobre el documento y generar un PDF firmado digitalmente (PKCS#7) listo para descarga.
+Incluye frontend con visor PDF.js y backend Node.js/Express para procesar la firma.
 
-Librerías principales (y versión sugerida)
+🔧 Tecnologías y librerías usadas
+Backend (Node.js 18+)
 
-Node / NPM — Node.js 18+ (ej. 18.20.8 que usas).
+express → Servidor HTTP y endpoint /sign.
 
-express — Servidor HTTP y endpoints.
+multer → Recepción de archivos PDF y .p12 como multipart/form-data.
 
-multer — Manejo de multipart/form-data y subida de archivos.
+pdf-lib → Edición del PDF: agregar QR, texto y elementos visibles.
 
-pdf-lib — Manipulación y edición de PDF (embed de imágenes, texto, rectángulos).
+node-signpdf → Firma digital CMS/PKCS#7 dentro del PDF.
 
-node-signpdf — Firma digital (inserta PKCS#7 / CMS en PDF). Depende de placeholder prep.
+node-forge → Lectura del certificado .p12, extracción de claves y CN.
 
-node-forge — Leer y parsear .p12, extraer certificado (CN), etc.
+qrcode → Generación de QR en base64 para insertar en el PDF.
 
-qrcode (npm qrcode) — Generar PNG/SVG Data URL del QR para embed en PDF.
+Frontend
 
-pdfjs-dist (a.k.a. PDF.js) — Render en frontend para mostrar PDF en <canvas> y permitir selección por clic (versión usada: 3.11.174 en tu front).
+pdfjs-dist (PDF.js) → Render del PDF dentro de <canvas> para permitir seleccionar la posición exacta donde irá la firma.
 
-(opcional) canvas — Si necesitas manipular imágenes en Node (p. ej. crear imágenes compuestas), pero en tu flujo embedes PNG generado por qrcode en pdf-lib, así que canvas no es obligatorio.
+JavaScript Vanilla → Cálculo de coordenadas reales (canvas interno vs. pantalla), control de páginas, envío del formulario.
 
-(dev/ops): nodemon para desarrollo, .gitignore, pm2 o systemd para producción si corres siempre.
+DevTools
 
-Instalación ejemplo:
+nodemon (opcional) → Recarga automática en desarrollo.
 
-npm install express multer pdf-lib node-signpdf node-forge qrcode pdfjs-dist
-# dev
-npm install -D nodemon
+.gitignore → Exclusión de /uploads, certificados y artefactos.
 
-Estructura de archivos (sugerida)
-/project
-  /public
-    index.html
-    app.js              # frontend (PDF.js viewer + selección)
-    styles.css
-  /utils
-    signPdf.js          # lógica de añadir visible + placeholder + firmar (.p12)
-    signImage.js (opt)  # si generas imágenes complejas (opcional)
-  server.js             # express + multer + endpoint /sign
-  package.json
-  .gitignore
-  README.md
+🏗️ Arquitectura y flujo del proceso
+1. Carga y visualización del PDF (Frontend)
 
-Flujo completo (end-to-end) — paso a paso
-1) Frontend — carga y renderizado del PDF
+PDF.js carga el documento y lo dibuja en un <canvas>.
 
-Usuario selecciona el PDF (<input type="file">).
+Se normaliza el clic del usuario convirtiendo coordenadas pantalla → PDF (canvas interno).
 
-PDF.js (pdfjsLib.getDocument) carga el archivo en memoria y renderiza la página actual en un <canvas> con un viewport a escala (ej. scale = 1.0 o configurable).
+Se guarda { page, x, y } para enviarlo al backend.
 
-El canvas tiene ancho/alto internos (canvas.width/height) que representan la resolución real del PDF renderizado; el CSS puede escalar la vista en pantalla.
-— Clave: para obtener coordenadas PDF exactas hay que convertir el clic desde display coordinates (px) a internal canvas coordinates usando scaleX = canvas.width / rect.width.
+2. Envío al backend
 
-2) Frontend — selección de posición
+Se envían:
 
-Cuando el usuario hace clic en el canvas:
+archivo PDF
 
-clickX_screen = e.clientX - rect.left
+archivo .p12
 
-clickY_screen = e.clientY - rect.top
+contraseña del certificado
 
-realX = clickX_screen * (canvas.width / rect.width)
+coordenadas x, y
 
-realY_from_bottom = canvas.height - (clickY_screen * (canvas.height / rect.height))
-(PDF usa origen abajo-izquierda; por eso invertimos Y)
+número de página
 
-Se muestra un marcador visual (div#marker) en la posición de la pantalla para feedback.
+Usando fetch() + FormData.
 
-Se guarda { page, x: realX, y: realY_from_bottom } y se puede permitir varios marcadores (array) si se solicitan múltiples firmas.
+3. Procesamiento en el servidor
 
-3) Envío al servidor
+multer recibe y almacena temporalmente los archivos.
 
-Se crea FormData con:
+pdf-lib abre el PDF base.
 
-pdf (archivo)
+Se genera QR con qrcode.
 
-cert (.p12)
+Se inserta QR y texto de firma visible en la página seleccionada.
 
-password (string)
+Se añade placeholder PKCS#7 con node-signpdf.
 
-x, y, page (coordenadas y página)
+Se firma usando el certificado .p12 + contraseña.
 
-Se fetch('/sign', { method: 'POST', body: form }).
+4. Respuesta al usuario
 
-4) Server (Express + Multer)
+El servidor devuelve el PDF firmado listo para descarga.
 
-multer guarda temporalmente PDF y .p12 en uploads/.
-
-Se parsean x, y, page desde req.body y rutas de archivos desde req.files.
-
-Llamada a signPdfVisibleAndDigital({ pdfPath, certPath, password, x, y, page, options }).
-
-5) signPdfVisibleAndDigital (utils/signPdf.js)
-
-Función core que:
-
-Lee pdfBytes y p12 buffer.
-
-Extrae nombre del firmante (CN) con node-forge.
-
-Genera QR con contenido (ej. bloque FirmaEC) usando qrcode.toDataURL(...).
-
-Convierte DataURL a Buffer/Uint8Array y embedPng en pdf-lib.
-
-Carga el PDF con PDFDocument.load(pdfBytes).
-
-Selecciona la página pages[page-1].
-
-Dibuja:
-
-un rectángulo de fondo blanco (opcional, para legibilidad),
-
-la imagen del QR en (x + padding, y + padding) (recuerda que pdf-lib usa origen abajo-izquierda),
-
-texto (firmado por, fecha, validar con...) con embedFont(StandardFonts.Helvetica) y drawText.
-
-dimensiones de la imagen y texto definidas (p. ej. QR 50×50 px).
-
-NOTA: coord {x,y} que recibe la función debe estar en las unidades internas del PDF (puntos) — por eso el frontend convierte.
-
-serializa PDF a buffer (pdfDoc.save({ useObjectStreams: false })).
-
-Inserta placeholder para node-signpdf con plainAddPlaceholder({ pdfBuffer, reason, name, location }).
-
-Firma con SignPdf().sign(pdfWithPlaceholder, p12Buffer, { passphrase: password }).
-
-Devuelve Buffer firmado al servidor.
-
-6) Server responde al cliente
-
-res.setHeader('Content-Type','application/pdf')
-
-res.setHeader('Content-Disposition','attachment; filename="original-signed.pdf"')
-
-res.send(signedPdfBuffer)
-
-Limpieza: fs.unlinkSync de archivos temporales.
-
-Puntos críticos / Trucos
-
-Coordenadas Y: PDF usa origen en esquina inferior izquierda; el canvas usa esquina superior izquierda -> debes invertir Y.
-
-Escalado: siempre convertir screen px -> canvas internal px con scale = canvas.width / rect.width.
-
-Placeholder: node-signpdf necesita un placeholder PKCS#7 vacío. plainAddPlaceholder te lo añade con el tamaño correcto.
-
-PDF corrupto: usar useObjectStreams: false en pdf-lib.save() evita problemas de compatibilidad con node-signpdf.
-
-QR embedding: qrcode.toDataURL() devuelve DataURL (base64). Convertir a Buffer.from(base64, 'base64') antes de embedPng.
-
-Tamaños: ajusta qrWidth/qrHeight según prefieras; ofrece controles en frontend para cambiar tamaño visible.
-
-Cross-platform: extraer os info es opcional y sensible — evita exponer datos innecesarios en QR público.
-
-Seguridad y producción
-
-No almacenes certificados .p12 ni PDFs sensibles sin cifrado en disco por mucho tiempo. Usa TTL y limpia inmediatamente.
-
-Rate-limit y protecciones contra uploads maliciosos (size limit en multer).
-
-Validaciones: validar page, x, y antes de usar.
-
-HTTPS obligatorio en producción (no enviar certificados por HTTP claro).
-
-Logs: no registrar contraseñas en texto plano.
-
-Permisos: carpeta uploads/ con permisos seguros y borrado post-proceso.
-
-Ejemplo de comandos útiles
-
-Instalar dependencias:
-
-npm init -y
-npm install express multer pdf-lib node-signpdf node-forge qrcode pdfjs-dist
-npm install -D nodemon
-
-
-Entrar:
-
-node server.js
-# o en dev
-npx nodemon server.js
+El frontend genera un Blob y fuerza la descarga automática.
